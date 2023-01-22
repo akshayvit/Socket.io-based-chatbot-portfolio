@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Socket.io Chat Server</title>
+        <style>
+            * {
+	 padding: 0;
+	 margin: 0;
+	 box-sizing: border-box;
+}
+ *:hover, *:focus {
+	 outline: none;
+}
+ .chat {
+	 width: 100%;
+	 max-width: 800px;
+	 height: calc(100vh - 50px);
+	 min-height: 100%;
+	 padding: 15px 30px;
+	 margin: 0 auto;
+	 overflow-y: scroll;
+	 background-color: #fff;
+	 transform: rotate(180deg);
+	 direction: rtl;
+}
+ .chat__wrapper {
+	 display: -webkit-box;
+	 display: -ms-flexbox;
+	 display: flex;
+	 -webkit-box-orient: vertical;
+	 -webkit-box-direction: normal;
+	 -ms-flex-direction: column-reverse;
+	 flex-direction: column-reverse;
+	 -webkit-box-pack: end;
+	 -ms-flex-pack: end;
+	 justify-content: flex-end;
+}
+ .chat__message {
+	 font-size: 14px;
+	 padding: 10px 20px;
+	 border-radius: 25px;
+	 color: #000;
+	 background-color: #e6e7ec;
+	 max-width: 600px;
+	 width: -webkit-fit-content;
+	 width: -moz-fit-content;
+	 width: fit-content;
+	 position: relative;
+	 margin: 15px 0;
+	 word-break: break-all;
+	 transform: rotate(180deg);
+	 direction: ltr;
+}
+ .chat__message:after {
+	 content: "";
+	 width: 20px;
+	 height: 12px;
+	 display: block;
+	 background-image: url("https://stageviewcincyshakes.firebaseapp.com/icon-gray-message.e6296433d6a72d473ed4.png");
+	 background-repeat: no-repeat;
+	 background-position: center;
+	 background-size: contain;
+	 position: absolute;
+	 bottom: -2px;
+	 left: -5px;
+}
+ .chat__message-own {
+	 color: #fff;
+	 margin-left: auto;
+	 background-color: #00a9de;
+}
+ .chat__message-own:after {
+	 width: 19px;
+	 height: 13px;
+	 left: inherit;
+	 right: -5px;
+	 background-image: url("https://stageviewcincyshakes.firebaseapp.com/icon-blue-message.2be55af0d98ee2864e29.png");
+}
+ .chat__form {
+	 background-color: #e0e0e0;
+}
+ .chat__form form {
+	 max-width: 800px;
+	 margin: 0 auto;
+	 height: 50px;
+	 display: -webkit-box;
+	 display: -ms-flexbox;
+	 display: flex;
+	 -webkit-box-align: center;
+	 -ms-flex-align: center;
+	 align-items: center;
+}
+ .chat__form input {
+	 height: 40px;
+	 font-size: 16px;
+	 min-width: 90%;
+	 padding-left: 15px;
+	 background-color: #fff;
+	 border-radius: 15px;
+	 border: none;
+}
+ .chat__form button {
+	 width: 10%;
+	 height: 100%;
+	 font-size: 16px;
+	 background-color: transparent;
+	 border: none;
+	 text-align: center;
+	 text-transform: uppercase;
+	 cursor: pointer;
+}
+ .chat__form button:hover {
+	 font-weight: bold;
+}.wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+#c {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.loading {
+  position: fixed;
+  z-index: 50;
+  width: 100%;
+  height: 100%;
+  top: 0; left: 0;
+  background: #f1f1f1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loader{
+  -webkit-perspective: 120px;
+  -moz-perspective: 120px;
+  -ms-perspective: 120px;
+  perspective: 120px;
+  width: 100px;
+  height: 100px;
+}
+
+.loader:before{
+  content: "";
+  position: absolute;
+  left: 25px;
+  top: 25px;
+  width: 50px;
+  height: 50px;
+  background-color: #9bffaf;
+  animation: flip 1s infinite;
+}
+
+@keyframes flip {
+  0% {
+    transform: rotate(0);
+  }
+
+  50% {
+    transform: rotateY(180deg);
+  }
+
+  100% {
+    transform: rotateY(180deg)  rotateX(180deg);
+  }
+}
+
+ 
+        </style>
+        <script>
+            (function() {
+  // Set our main variables
+  let scene,  
+    renderer,
+    camera,
+    model,                              // Our character
+    neck,                               // Reference to the neck bone in the skeleton
+    waist,                               // Reference to the waist bone in the skeleton
+    possibleAnims,                      // Animations found in our file
+    mixer,                              // THREE.js animations mixer
+    idle,                               // Idle, the default state our character returns to
+    clock = new THREE.Clock(),          // Used for anims, which run to a clock instead of frame rate 
+    currentlyAnimating = false,         // Used to check whether characters neck is being used in another anim
+    raycaster = new THREE.Raycaster(),  // Used to detect the click on our character
+    loaderAnim = document.getElementById('js-loader');
+  
+  init(); 
+
+  function init() {
+    
+    const MODEL_PATH = 'https://s3-us-west-2.amazonaws.com/s.cdpn.io/1376484/stacy_lightweight.glb';
+    const canvas = document.querySelector('#c');
+    const backgroundColor = 0xf1f1f1;
+    
+    // Init the scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(backgroundColor);
+    scene.fog = new THREE.Fog(backgroundColor, 60, 100);
+    
+    // Init the renderer
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+    
+    // Add a camera
+    camera = new THREE.PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.z = 30 
+    camera.position.x = 0;
+    camera.position.y = -3;
+    
+    let stacy_txt = new THREE.TextureLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/1376484/stacy.jpg');
+    stacy_txt.flipY = false;
+
+    const stacy_mtl = new THREE.MeshPhongMaterial({
+      map: stacy_txt,
+      color: 0xffffff,
+      skinning: true
+    });
+
+    
+    var loader = new THREE.GLTFLoader();
+
+    loader.load(
+      MODEL_PATH,
+      function(gltf) {
+        model = gltf.scene;
+        let fileAnimations = gltf.animations;
+
+          model.traverse(o => {
+
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+            o.material = stacy_mtl;
+          }
+          // Reference the neck and waist bones
+          if (o.isBone && o.name === 'mixamorigNeck') { 
+            neck = o;
+          }
+          if (o.isBone && o.name === 'mixamorigSpine') { 
+            waist = o;
+          }
+        });
+        
+        model.scale.set(7, 7, 7);
+        model.position.y = -11;
+                
+        scene.add(model);
+        
+        loaderAnim.remove();
+        
+        mixer = new THREE.AnimationMixer(model);
+        
+         let clips = fileAnimations.filter(val => val.name !== 'idle');
+          possibleAnims = clips.map(val => {
+            let clip = THREE.AnimationClip.findByName(clips, val.name);
+
+            clip.tracks.splice(3, 3);
+            clip.tracks.splice(9, 3);
+
+            clip = mixer.clipAction(clip);
+            return clip;
+          }
+         );
+        
+        let idleAnim = THREE.AnimationClip.findByName(fileAnimations, 'idle');
+        
+        idleAnim.tracks.splice(3, 3);
+        idleAnim.tracks.splice(9, 3);
+        
+        idle = mixer.clipAction(idleAnim);
+        idle.play();
+        
+      },
+      undefined, // We don't need this function
+      function(error) {
+        console.error(error);
+      }
+    );
+    
+    // Add lights
+    let hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.61);
+    hemiLight.position.set(0, 50, 0);
+    // Add hemisphere light to scene
+    scene.add(hemiLight);
+
+    let d = 8.25;
+    let dirLight = new THREE.DirectionalLight(0xffffff, 0.54);
+    dirLight.position.set(-8, 12, 8);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
+    dirLight.shadow.camera.near = 0.1;
+    dirLight.shadow.camera.far = 1500;
+    dirLight.shadow.camera.left = d * -1;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = d * -1;
+    // Add directional Light to scene
+    scene.add(dirLight);
+    
+    
+  // Floor
+  let floorGeometry = new THREE.PlaneGeometry(5000, 5000, 1, 1);
+  let floorMaterial = new THREE.MeshPhongMaterial({
+    color: 0xeeeeee,
+    shininess: 0,
+  });
+
+  let floor = new THREE.Mesh(floorGeometry, floorMaterial);
+  floor.rotation.x = -0.5 * Math.PI;
+  floor.receiveShadow = true;
+  floor.position.y = -11;
+  scene.add(floor);
+    
+let geometry = new THREE.SphereGeometry(8, 32, 32);
+let material = new THREE.MeshBasicMaterial({ color: 0x9bffaf }); // 0xf2ce2e 
+let sphere = new THREE.Mesh(geometry, material);
+    
+sphere.position.z = -15;
+sphere.position.y = -2.5;
+sphere.position.x = -0.25;
+scene.add(sphere);   
+ }
+
+ 
+  function update() {
+    if (mixer) {
+      mixer.update(clock.getDelta());
+    }
+    
+    if (resizeRendererToDisplaySize(renderer)) {
+      const canvas = renderer.domElement;
+      camera.aspect = canvas.clientWidth / canvas.clientHeight;
+      camera.updateProjectionMatrix();
+    }
+    
+     renderer.render(scene, camera);
+    requestAnimationFrame(update);
+  }
+
+  update();
+  
+   function resizeRendererToDisplaySize(renderer) {
+    const canvas = renderer.domElement;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    let canvasPixelWidth = canvas.width / window.devicePixelRatio;
+    let canvasPixelHeight = canvas.height / window.devicePixelRatio;
+
+    const needResize =
+      canvasPixelWidth !== width || canvasPixelHeight !== height;
+    if (needResize) {
+      renderer.setSize(width, height, false);
+    }
+    return needResize;
+  }
+  
+      window.addEventListener('click', e => raycast(e));
+      window.addEventListener('touchend', e => raycast(e, true));
+
+      function raycast(e, touch = false) {
+        var mouse = {};
+        if (touch) {
+          mouse.x = 2 * (e.changedTouches[0].clientX / window.innerWidth) - 1;
+          mouse.y = 1 - 2 * (e.changedTouches[0].clientY / window.innerHeight);
+        } else {
+          mouse.x = 2 * (e.clientX / window.innerWidth) - 1;
+          mouse.y = 1 - 2 * (e.clientY / window.innerHeight);
+        }
+        // update the picking ray with the camera and mouse position
+        raycaster.setFromCamera(mouse, camera);
+
+        // calculate objects intersecting the picking ray
+        var intersects = raycaster.intersectObjects(scene.children, true);
+
+        if (intersects[0]) {
+          var object = intersects[0].object;
+
+          if (object.name === 'stacy') {
+
+            if (!currentlyAnimating) {
+              currentlyAnimating = true;
+              playOnClick();
+            }
+          }
+        }
+      }
+  
+     // Get a random animation, and play it 
+   function playOnClick() {
+    let anim = Math.floor(Math.random() * possibleAnims.length) + 0;
+    playModifierAnimation(idle, 0.25, possibleAnims[anim], 0.25);
+  }
+
+
+    function playModifierAnimation(from, fSpeed, to, tSpeed) {
+      to.setLoop(THREE.LoopOnce);
+      to.reset();
+      to.play();
+      from.crossFadeTo(to, fSpeed, true);
+      setTimeout(function() {
+        from.enabled = true;
+        to.crossFadeTo(from, tSpeed, true);
+        currentlyAnimating = false;
+      }, to._clip.duration * 1000 - ((tSpeed + fSpeed) * 1000));
+    }
+  
+  document.addEventListener('mousemove', function(e) {
+    var mousecoords = getMousePos(e);
+      if (neck && waist) {
+
+        moveJoint(mousecoords, neck, 50);
+        moveJoint(mousecoords, waist, 30);
+      }
+  });
+
+  function getMousePos(e) {
+    return { x: e.clientX, y: e.clientY };
+  }
+  
+    function moveJoint(mouse, joint, degreeLimit) {
+      let degrees = getMouseDegrees(mouse.x, mouse.y, degreeLimit);
+      joint.rotation.y = THREE.Math.degToRad(degrees.x);
+      joint.rotation.x = THREE.Math.degToRad(degrees.y);
+    }
+  
+    function getMouseDegrees(x, y, degreeLimit) {
+    let dx = 0,
+        dy = 0,
+        xdiff,
+        xPercentage,
+        ydiff,
+        yPercentage;
+
+    let w = { x: window.innerWidth, y: window.innerHeight };
+
+    // Left (Rotates neck left between 0 and -degreeLimit)
+     // 1. If cursor is in the left half of screen
+    if (x <= w.x / 2) {
+     // 2. Get the difference between middle of screen and cursor position
+      xdiff = w.x / 2 - x; 
+      // 3. Find the percentage of that difference (percentage toward edge of screen)
+      xPercentage = (xdiff / (w.x / 2)) * 100; 
+      // 4. Convert that to a percentage of the maximum rotation we allow for the neck
+      dx = ((degreeLimit * xPercentage) / 100) * -1; 
+    }
+    
+    // Right (Rotates neck right between 0 and degreeLimit)
+    if (x >= w.x / 2) {
+      xdiff = x - w.x / 2;
+      xPercentage = (xdiff / (w.x / 2)) * 100;
+      dx = (degreeLimit * xPercentage) / 100;
+    }
+    // Up (Rotates neck up between 0 and -degreeLimit)
+    if (y <= w.y / 2) {
+      ydiff = w.y / 2 - y;
+      yPercentage = (ydiff / (w.y / 2)) * 100;
+      // Note that I cut degreeLimit in half when she looks up
+      dy = (((degreeLimit * 0.5) * yPercentage) / 100) * -1;
+    }
+    // Down (Rotates neck down between 0 and degreeLimit)
+    if (y >= w.y / 2) {
+      ydiff = y - w.y / 2;
+      yPercentage = (ydiff / (w.y / 2)) * 100;
+      dy = (degreeLimit * yPercentage) / 100;
+    }
+    return { x: dx, y: dy };
+  }
+  
+  })();
+        </script>
+        <!-- Bootstrap CSS f0fd91e263894019bed16a212311066a -->
+        <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-danger">
+        <div class="container-fluid align-items-center justify-content-center" style="position: fixed;top:0;max-height: 800px;margin-right: 85px; border: none;">
+         <figure class="bg-success" style="box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;">
+            <img src="https://avatars.githubusercontent.com/u/35296051?v=4" alt="akshay" style="width: 200px;height: 200px; border-radius: 80px;"/>
+            <figcaption class="text-center"><strong>Mr. Akshay Chatterjee</strong></figcaption>
+        </figure>
+
+
+        
+<pre style="background-color:#000;color:#fff;height: 600px; font-weight: bold;font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 200px;"><blockquote  cite="https://www.invajy.com/25-inspirational-quotes-to-make-you-think/">
+“The Law 
+of Win/Win
+says, ‘Let’s 
+not do it 
+your way 
+or my way;
+let’s do it
+the best way’.”
+</blockquote>
+        </pre>
+        </blockquote>
+        </div>
+        <div style="position: fixed;top: 1px;left:1000px;align-items: right;height: 1400px;" class="sketchfab-embed-wrapper"><iframe width="100%" height="650" src="https://sketchfab.com/models/f0fd91e263894019bed16a212311066a/embed?autostart=1&amp;preload=1" frameborder="0" allow="autoplay; vr"></iframe>
+        </div>
+        <script src=
+        "https://smtpjs.com/v3/smtp.js">
+      </script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+        <!-- Bootstrap JavaScript -->
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+        <script src="/socket.io/socket.io.js"></script>
+       
+        <div class="chat">
+            <div class="chat__wrapper">
+                <div class="chat__message chat_message-sent">
+                    <div class="date"></div>
+                    <div><h1>Interested About Akshay ? 😎</h1>
+                        <p><strong>Suggestion 1:</strong> What is educational bakground Akshay having?</p>
+                        <p><strong>Suggestion 2:</strong> What achievements Akshay having?</p>
+                        <p><strong>Suggestion 3:</strong> What future Aim Akshay having?</p>
+                        <p><strong>Suggestion 4:</strong> What are the good projects Akshay having?</p>
+                        <p><strong>Suggestion 5:</strong> Let me know about Akshay.</p>
+                        <p><strong>Suggestion 6:</strong> <del>Is Akshay Single still?</del>Nope, thats too much personal 🥹</p>
+                    </div>
+                </div>
+            </div>
+          </div>
+        <div style="position: fixed; bottom:0;width:100vw;">
+            <form id="my-form" action="">
+                <input type="text" name="" id="m" class="form-control text-center" placeholder="Kindly let me know your interest" value="" required="required" title="" style="background:rgb(198, 168, 228);color:rgb(255, 255, 255);font-weight: bold;font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;height: 80px;">
+            </form>
+        </div>
+        <!-- jQuery -->
+        
+        <script>
+            var socket = io();
+            $('#my-form').submit(function(){
+             //   e.preventDefault();
+                var msg = $('#m').val();
+                if(msg.length > 0)
+                    socket.emit('chat message', msg);
+                else
+                    console.log("Enter a valid msg :)");
+                $('#m').val("");
+                return false;
+            });
+            socket.on('chat message', function(msg){
+                console.log(msg);
+                var date = new Date().toJSON().slice(0,10).replace(/-/g,'.');
+                $('.chat__wrapper').append('<div class="chat__message chat__message-own"><div class="date">' + date + '</div><div>' + msg + '</div></div>');
+            });
+            socket.on('chat reply', function(msg){
+                var date = new Date().toJSON().slice(0,10).replace(/-/g,'.');
+                $('.chat__wrapper').append('<div class="chat__message chat_message-sent"><div class="date">' + date + '</div><div>' + msg + '</div></div>');
+               // const txt=$("#m").val();
+
+            if(msg.includes("iframe")) {
+                $("#aim1").fadeIn(2000);
+                $("#aim2").fadeIn(4000);
+                $("#aim3").fadeIn(6000);
+                $("#aim4").fadeIn(8500);
+            }
+            if(msg.include("Contact me")) {
+                $("#send_mail").on("click",()=>{
+                Email.send({
+        Host: "smtp.gmail.com",
+        Username: $("#email").val(),
+        Password: "",
+        To: 'akshay.chatterjee2015vit@gmail.com',
+        From: $("#email").val() ,
+        Subject: $("#subject").val(),
+        Body: $("#message").val(),
+      })
+        .then(function (message,err) {
+            if(err) $('.chat__wrapper').append('<div class="chat__message chat_message-sent"><div class="date">' + date + '</div><div>' + "Your e-mail is not recieved 😥" + '</div></div>');
+            else $('.chat__wrapper').append('<div class="chat__message chat_message-sent"><div class="date">' + date + '</div><div>' + "Your e-mail is recieved. Thank you 🤩" + '</div></div>');
+
+        }).catch((err)=>{ $('.chat__wrapper').append('<div class="chat__message chat_message-sent"><div class="date">' + date + '</div><div>' + "Your e-mail is not recieved 😥" + '</div></div>');});
+    });
+            }
+            });
+        </script>
+    </body>
+</html>
