@@ -1,4 +1,4 @@
-!https://img.shields.io/static/v1?label=critical&message=important&color=red
+<img src='https://img.shields.io/static/v1?label=type&message=important&color=red'/>
 
 <h1>PERSONAL CHATBOT BASED PORTFOLIO</h1>
 
