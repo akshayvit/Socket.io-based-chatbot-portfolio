@@ -1,3 +1,5 @@
+!https://img.shields.io/static/v1?label=critical&message=important&color=red
+
 <h1>PERSONAL CHATBOT BASED PORTFOLIO</h1>
 
 <p>
